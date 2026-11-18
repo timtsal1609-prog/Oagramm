@@ -11,13 +11,22 @@ jobs:
           if [ -n "$Z" ]; then unzip -q "$Z" -d proj; fi
           D=$(dirname "$(find . -name settings.gradle.kts | head -1)")
           echo "DIR=$D" >> $GITHUB_ENV
+      - name: Fix source
+        run: |
+          sed -i 's/catch (_: Exception)/catch (e: Exception)/; s/TextButton(::send)/TextButton({ send() })/' "$DIR/app/src/main/java/com/example/messenger/MainActivity.kt"
       - uses: actions/setup-java@v4
         with: {distribution: temurin, java-version: 17}
       - name: Accept licenses
         run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses || true
       - uses: gradle/actions/setup-gradle@v4
         with: {gradle-version: 8.7}
-      - run: cd "$DIR" && gradle assembleDebug --no-daemon
+      - name: Build
+        run: cd "$DIR" && gradle assembleDebug --no-daemon --console=plain > build.log 2>&1
+      - name: Show errors
+        if: failure()
+        run: |
+          cd "$DIR"
+          (grep -E '^e: |What went wrong' -A4 build.log || tail -30 build.log) | head -10 | while IFS= read -r l; do echo "::error::$l"; done
       - uses: actions/upload-artifact@v4
         with:
           name: app-debug
